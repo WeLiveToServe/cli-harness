@@ -32,14 +32,27 @@ def _delegate_native(argv: list[str]) -> int:
     return run_interactive(cmd, os.environ.copy())
 
 
+def _model_definition(model_id: str) -> dict:
+    """Build a minimal OpenCode model definition for the given OpenRouter model slug."""
+    bare = model_id.removeprefix("openrouter/")
+    return {
+        "id": bare,
+        "name": bare,
+        "family": bare.split("/")[0],
+        "attachment": False,
+        "reasoning": False,
+        "temperature": True,
+        "tool_call": True,
+        "limit": {"context": 131072, "output": 16384},
+    }
+
+
 def _openrouter_config_content(target_base_url: str, model_id: str, api_key: str) -> str:
-    # Force an in-memory OpenCode config for OpenRouter-only execution so stale
-    # local/global provider files cannot drop auth headers or reroute models.
+    bare = model_id.removeprefix("openrouter/")
     config = {
         "$schema": "https://opencode.ai/config.json",
         "model": model_id,
         "small_model": model_id,
-        "enabled_providers": ["openrouter"],
         "provider": {
             "openrouter": {
                 "name": "OpenRouter",
@@ -54,19 +67,7 @@ def _openrouter_config_content(target_base_url: str, model_id: str, api_key: str
                     },
                 },
                 "models": {
-                    "qwen/qwen3.6-plus": {
-                        "id": "qwen/qwen3.6-plus",
-                        "name": "Qwen 3.6 Plus (1M)",
-                        "family": "qwen",
-                        "attachment": True,
-                        "reasoning": True,
-                        "temperature": True,
-                        "tool_call": True,
-                        "limit": {
-                            "context": 1000000,
-                            "output": 32768,
-                        },
-                    }
+                    bare: _model_definition(model_id),
                 },
             }
         },
