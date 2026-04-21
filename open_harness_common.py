@@ -9,7 +9,15 @@ from pathlib import Path
 
 DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 _DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-_ENV_FILE = Path.home() / "dev" / ".env"
+_LOCAL_ENV_FILE = Path(__file__).resolve().parent / ".env"
+
+HARNESS_OPENROUTER_API_KEY = "HARNESS_OPENROUTER_API_KEY"
+HARNESS_OPENROUTER_BASE_URL = "HARNESS_OPENROUTER_BASE_URL"
+HARNESS_OPENROUTER_MODEL = "HARNESS_OPENROUTER_MODEL"
+
+OPENROUTER_API_KEY = "OPENROUTER_API_KEY"
+OPENROUTER_BASE_URL = "OPENROUTER_BASE_URL"
+OPENROUTER_MODEL = "OPENROUTER_MODEL"
 
 
 @dataclass
@@ -23,8 +31,8 @@ class LaunchTarget:
 
 def _read_env_file() -> dict[str, str]:
     result: dict[str, str] = {}
-    if _ENV_FILE.exists():
-        for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+    if _LOCAL_ENV_FILE.exists():
+        for line in _LOCAL_ENV_FILE.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
@@ -33,12 +41,43 @@ def _read_env_file() -> dict[str, str]:
     return result
 
 
+def _resolve_env_value(preferred_key: str, compat_key: str, default: str = "") -> str:
+    """
+    Precedence order:
+      1) Process env preferred key      (e.g. HARNESS_OPENROUTER_API_KEY)
+      2) Process env compatibility key  (e.g. OPENROUTER_API_KEY)
+      3) Local .env preferred key
+      4) Local .env compatibility key
+    """
+    process_value = os.environ.get(preferred_key, "").strip()
+    if process_value:
+        return process_value
+    process_compat = os.environ.get(compat_key, "").strip()
+    if process_compat:
+        return process_compat
+
+    file_env = _read_env_file()
+    file_value = file_env.get(preferred_key, "").strip()
+    if file_value:
+        return file_value
+    file_compat = file_env.get(compat_key, "").strip()
+    if file_compat:
+        return file_compat
+    return default
+
+
 def _get_openrouter_key() -> str:
-    return os.environ.get("OPENROUTER_API_KEY") or _read_env_file().get("OPENROUTER_API_KEY", "")
+    return _resolve_env_value(HARNESS_OPENROUTER_API_KEY, OPENROUTER_API_KEY)
 
 
 def _get_openrouter_base_url() -> str:
-    return os.environ.get("OPENROUTER_BASE_URL") or _read_env_file().get("OPENROUTER_BASE_URL", _DEFAULT_BASE_URL)
+    return _resolve_env_value(HARNESS_OPENROUTER_BASE_URL, OPENROUTER_BASE_URL, _DEFAULT_BASE_URL)
+
+
+def _get_openrouter_model() -> str:
+    raw = _resolve_env_value(HARNESS_OPENROUTER_MODEL, OPENROUTER_MODEL, DEFAULT_OPENROUTER_MODEL)
+    normalized = _strip_openrouter_prefix(raw.strip())
+    return normalized or DEFAULT_OPENROUTER_MODEL
 
 
 def normalize_base_url(url: str) -> str:
@@ -62,27 +101,29 @@ def _strip_openrouter_prefix(model: str) -> str:
     return m
 
 
-def resolve_locked_model(requested_model: str = "") -> str:
+def resolve_locked_model(requested_model: str = "", locked_model: str = "") -> str:
+    configured_model = _strip_openrouter_prefix(locked_model.strip()) if locked_model.strip() else _get_openrouter_model()
     normalized = _strip_openrouter_prefix(requested_model)
-    if normalized and normalized != DEFAULT_OPENROUTER_MODEL:
+    if normalized and normalized != configured_model:
         raise RuntimeError(
             f"Model override '{requested_model}' is not allowed. "
-            f"This launcher is locked to '{DEFAULT_OPENROUTER_MODEL}'."
+            f"This launcher is locked to '{configured_model}'."
         )
-    return DEFAULT_OPENROUTER_MODEL
+    return configured_model
 
 
 def openrouter_target() -> LaunchTarget:
     key = _get_openrouter_key()
     if not key:
         raise RuntimeError(
-            "OPENROUTER_API_KEY is not configured. Set it in environment or ~/dev/.env first."
+            f"{HARNESS_OPENROUTER_API_KEY} (preferred) or {OPENROUTER_API_KEY} is not configured. "
+            f"Set it in process env or {_LOCAL_ENV_FILE}."
         )
     return LaunchTarget(
         provider_name="openrouter",
         base_url=normalize_base_url(_get_openrouter_base_url()),
-        model=DEFAULT_OPENROUTER_MODEL,
-        env_key_name="OPENROUTER_API_KEY",
+        model=_get_openrouter_model(),
+        env_key_name=HARNESS_OPENROUTER_API_KEY,
         env_key_value=key,
     )
 
