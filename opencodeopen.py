@@ -97,6 +97,12 @@ def _with_psycho_permissions(passthrough: list[str]) -> list[str]:
     return [item for item in passthrough if item != flag] + [flag]
 
 
+def _opencode_model_arg(model: str) -> str:
+    if model.startswith("openrouter/"):
+        return model
+    return f"openrouter/{model}"
+
+
 def _model_definition(model_id: str) -> dict:
     """Build a minimal OpenCode model definition for the given OpenRouter model slug."""
     bare = model_id.removeprefix("openrouter/")
@@ -215,7 +221,7 @@ def main() -> int:
     if args.psycho:
         passthrough = _with_psycho_permissions(passthrough)
 
-    model_arg = f"openrouter/{model}"
+    model_arg = _opencode_model_arg(model)
     cmd = [native_cli, "-m", model_arg, *passthrough]
 
     env = os.environ.copy()
