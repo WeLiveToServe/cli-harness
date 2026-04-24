@@ -13,7 +13,7 @@ import shlex
 import sys
 from pathlib import Path
 
-from open_harness_common import openrouter_target, resolve_locked_model, run_interactive
+from open_harness_common import openrouter_target, resolve_harness_model, run_interactive
 
 
 def _native_qwen() -> str:
@@ -30,12 +30,34 @@ def _delegate_native(argv: list[str]) -> int:
     return run_interactive(cmd, os.environ.copy())
 
 
+def _with_psycho_permissions(passthrough: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_next = False
+    for item in passthrough:
+        if skip_next:
+            skip_next = False
+            continue
+        if item == "--approval-mode":
+            skip_next = True
+            continue
+        if item.startswith("--approval-mode="):
+            continue
+        if item in {"--yolo", "-y"}:
+            continue
+        filtered.append(item)
+    return [*filtered, "--approval-mode", "yolo"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--openrouter", action="store_true")
     parser.add_argument("--model", default="")
+    parser.add_argument("--psycho", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args, passthrough = parser.parse_known_args()
+
+    if args.psycho:
+        args.openrouter = True
 
     if not args.openrouter:
         native_passthrough = {"mcp", "extensions", "auth", "hooks", "hook", "channel", "--help", "-h", "--version", "-v"}
@@ -45,10 +67,13 @@ def main() -> int:
 
     try:
         target = openrouter_target()
-        model = resolve_locked_model(args.model)
+        model = resolve_harness_model(args.model, target=target)
     except Exception as exc:
         print(f"[qwen] {exc}", file=sys.stderr)
         return 1
+
+    if args.psycho:
+        passthrough = _with_psycho_permissions(passthrough)
 
     cmd = [
         _native_qwen(),
@@ -77,9 +102,11 @@ def main() -> int:
     # Avoid stale shell-level model var causing invalid model resolution in native qwen config.
     env["OPENROUTER_MODEL_ID"] = model
 
-    print(f"[qwen] provider={target.provider_name} base_url={target.base_url} model={model}")
-    print("[qwen] env_key=OPENAI_API_KEY")
-    print(f"[qwen] cmd={' '.join(shlex.quote(c) for c in cmd_redacted)}")
+    print(f"[qwen] provider={target.provider_name} base_url={target.base_url} model={model}", file=sys.stderr)
+    print("[qwen] env_key=OPENAI_API_KEY", file=sys.stderr)
+    if args.psycho:
+        print("[qwen] psycho=--approval-mode yolo", file=sys.stderr)
+    print(f"[qwen] cmd={' '.join(shlex.quote(c) for c in cmd_redacted)}", file=sys.stderr)
 
     if args.dry_run:
         return 0

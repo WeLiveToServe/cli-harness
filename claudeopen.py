@@ -11,7 +11,25 @@ import shlex
 import sys
 from pathlib import Path
 
-from open_harness_common import openrouter_target, resolve_locked_model, run_interactive, strip_v1
+from open_harness_common import openrouter_target, resolve_harness_model, run_interactive, strip_v1
+
+
+def _with_psycho_permissions(passthrough: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_next = False
+    for item in passthrough:
+        if skip_next:
+            skip_next = False
+            continue
+        if item == "--permission-mode":
+            skip_next = True
+            continue
+        if item.startswith("--permission-mode="):
+            continue
+        if item == "--dangerously-skip-permissions":
+            continue
+        filtered.append(item)
+    return [*filtered, "--permission-mode", "bypassPermissions", "--dangerously-skip-permissions"]
 
 
 def _build_cmd(cwd: str, model: str, passthrough: list[str]) -> list[str]:
@@ -23,16 +41,29 @@ def _build_cmd(cwd: str, model: str, passthrough: list[str]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Launch Claude Code against OpenRouter.")
-    parser.add_argument("--model", default="", help="Ignored unless set to locked model qwen/qwen3.6-plus.")
+    parser.add_argument(
+        "--model",
+        default="",
+        metavar="MODEL_ID",
+        help="Model ID to launch. Use a full OpenRouter model ID for OpenRouter cloud.",
+    )
+    parser.add_argument(
+        "--psycho",
+        action="store_true",
+        help="Shortcut for --permission-mode bypassPermissions --dangerously-skip-permissions.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print resolved target and command without launching.")
     args, passthrough = parser.parse_known_args()
 
     try:
         target = openrouter_target()
-        model = resolve_locked_model(args.model)
+        model = resolve_harness_model(args.model, target=target)
     except Exception as exc:
-        print(f"[claudeopen] {exc}", file=sys.stderr)
+        print(f"[claude-os] {exc}", file=sys.stderr)
         return 1
+
+    if args.psycho:
+        passthrough = _with_psycho_permissions(passthrough)
 
     cwd = str(Path.cwd())
     cmd = _build_cmd(cwd, model, passthrough)
@@ -51,10 +82,12 @@ def main() -> int:
     env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
     env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = f"OpenRouter: {model}"
 
-    print(f"[claudeopen] provider={target.provider_name} base_url={env['ANTHROPIC_BASE_URL']} model={model}")
-    print(f"[claudeopen] config_dir={isolated_config} (isolated from claude.ai login)")
-    print("[claudeopen] env_key=ANTHROPIC_API_KEY (set to OpenRouter key)")
-    print(f"[claudeopen] cmd={' '.join(shlex.quote(c) for c in cmd)}")
+    print(f"[claude-os] provider={target.provider_name} base_url={env['ANTHROPIC_BASE_URL']} model={model}", file=sys.stderr)
+    print(f"[claude-os] config_dir={isolated_config} (isolated from claude.ai login)", file=sys.stderr)
+    print("[claude-os] env_key=ANTHROPIC_API_KEY (set to OpenRouter key)", file=sys.stderr)
+    if args.psycho:
+        print("[claude-os] psycho=--permission-mode bypassPermissions --dangerously-skip-permissions", file=sys.stderr)
+    print(f"[claude-os] cmd={' '.join(shlex.quote(c) for c in cmd)}", file=sys.stderr)
 
     if args.dry_run:
         return 0

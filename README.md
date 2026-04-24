@@ -2,12 +2,60 @@
 
 This repository is the source of truth for local harness launcher wrappers.
 
+## Commands
+
+Canonical wrapper commands:
+
+```powershell
+C:\Users\keith\dev\cli-harness\codex-os.cmd
+C:\Users\keith\dev\cli-harness\claude-os.cmd
+C:\Users\keith\dev\cli-harness\opencode.cmd
+C:\Users\keith\dev\cli-harness\qwen.cmd
+```
+
+Legacy aliases `codexopen.cmd` and `claudeopen.cmd` are still present for
+older scripts, but new usage should prefer `codex-os.cmd` and `claude-os.cmd`.
+
+## Psycho Mode
+
+Every wrapper accepts `--psycho` as a local convenience alias for that harness's
+maximum-permission mode:
+
+| Wrapper | Expands to |
+| --- | --- |
+| `codex-os` | `--dangerously-bypass-approvals-and-sandbox` |
+| `claude-os` | `--permission-mode bypassPermissions --dangerously-skip-permissions` |
+| `opencode` | `--dangerously-skip-permissions` |
+| `qwen` | `--approval-mode yolo` |
+
+Examples:
+
+```powershell
+codex-os --psycho exec --skip-git-repo-check "Reply with OK"
+claude-os --psycho -p "Reply with OK"
+opencode --psycho run "Reply with OK"
+qwen --psycho --prompt "Reply with OK"
+```
+
+## Model Selection
+
+For OpenRouter cloud, pass full OpenRouter model IDs:
+
+```powershell
+codex-os --list-models
+codex-os --model qwen/qwen3.6-plus
+qwen --model openai/gpt-oss-120b:free --prompt "Reply with OK"
+```
+
+For local GPU endpoints, process-scoped `HARNESS_OPENROUTER_MODEL` can still be
+a served model name such as `gpt-oss-120b`.
+
 ## OpenCode Deterministic Launch
 
 During repair and validation, run OpenCode from this repo only:
 
 ```powershell
-C:\Users\keith\dev\cli-harness\opencode.cmd run "Reply with OK" --dangerously-skip-permissions --pure
+C:\Users\keith\dev\cli-harness\opencode.cmd --psycho run "Reply with OK" --pure
 ```
 
 Do not use bare `opencode` during repair because shell PATH may resolve a different shim.

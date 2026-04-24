@@ -16,7 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from open_harness_common import openrouter_target, resolve_locked_model, run_interactive
+from open_harness_common import openrouter_target, resolve_harness_model, run_interactive
 
 NATIVE_OVERRIDE_ENV = "OPENCODE_NATIVE_CLI"
 RECURSION_GUARD_ENV = "HARNESS_OPENCODE_WRAPPER_ACTIVE"
@@ -92,6 +92,11 @@ def _delegate_native(argv: list[str]) -> int:
     return run_interactive(cmd, env)
 
 
+def _with_psycho_permissions(passthrough: list[str]) -> list[str]:
+    flag = "--dangerously-skip-permissions"
+    return [item for item in passthrough if item != flag] + [flag]
+
+
 def _model_definition(model_id: str) -> dict:
     """Build a minimal OpenCode model definition for the given OpenRouter model slug."""
     bare = model_id.removeprefix("openrouter/")
@@ -159,8 +164,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--openrouter", action="store_true")
     parser.add_argument("--model", default="")
+    parser.add_argument("--psycho", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args, passthrough = parser.parse_known_args()
+
+    if args.psycho:
+        args.openrouter = True
 
     if not args.openrouter:
         native_passthrough = {
@@ -198,10 +207,13 @@ def main() -> int:
     try:
         native_cli = _native_opencode()
         target = openrouter_target()
-        model = resolve_locked_model(args.model, locked_model=target.model)
+        model = resolve_harness_model(args.model, target=target)
     except Exception as exc:
         print(f"[opencode] {exc}", file=sys.stderr)
         return 1
+
+    if args.psycho:
+        passthrough = _with_psycho_permissions(passthrough)
 
     model_arg = f"openrouter/{model}"
     cmd = [native_cli, "-m", model_arg, *passthrough]
@@ -225,12 +237,14 @@ def main() -> int:
     )
     env.pop("OPENAI_BASE_URL", None)
 
-    print(f"[opencode] provider={target.provider_name} base_url={target.base_url} model={model_arg}")
-    print(f"[opencode] env_key={target.env_key_name}")
-    print("[opencode] mode=forced-openrouter-config")
-    print(f"[opencode] xdg_root={str(Path.home() / '.opencode-openrouter')}")
-    print(f"[opencode] native_cli={native_cli}")
-    print(f"[opencode] cmd={' '.join(shlex.quote(c) for c in cmd)}")
+    print(f"[opencode] provider={target.provider_name} base_url={target.base_url} model={model_arg}", file=sys.stderr)
+    print(f"[opencode] env_key={target.env_key_name}", file=sys.stderr)
+    print("[opencode] mode=forced-openrouter-config", file=sys.stderr)
+    print(f"[opencode] xdg_root={str(Path.home() / '.opencode-openrouter')}", file=sys.stderr)
+    print(f"[opencode] native_cli={native_cli}", file=sys.stderr)
+    if args.psycho:
+        print("[opencode] psycho=--dangerously-skip-permissions", file=sys.stderr)
+    print(f"[opencode] cmd={' '.join(shlex.quote(c) for c in cmd)}", file=sys.stderr)
 
     if args.dry_run:
         return 0
