@@ -106,6 +106,10 @@ class OpenCodeTests(unittest.TestCase):
         self.assertEqual(payload["model"], "openrouter/auto")
         self.assertIn("auto", payload["provider"]["openrouter"]["models"])
 
+    def test_opencode_bin_override_is_preferred(self) -> None:
+        with mock.patch.dict(os.environ, {opencodeopen.BIN_PATH_ENV: str(REPO_ROOT / "opencodeopen.py")}):
+            self.assertEqual(opencodeopen._native_opencode_bin(), str(REPO_ROOT / "opencodeopen.py"))
+
 
 if __name__ == "__main__":
     unittest.main()

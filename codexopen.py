@@ -62,7 +62,7 @@ def _build_codex_cmd(target: LaunchTarget, cwd: str, model: str, passthrough: li
         "-c",
         f'model_providers.{provider_id}.env_key="{target.env_key_name}"',
         "-c",
-        f'model_providers.{provider_id}.wire_api="responses"',
+        f'model_providers.{provider_id}.wire_api="chat"',
         "-C",
         cwd,
     ]
@@ -178,9 +178,10 @@ def main() -> int:
 
     env = os.environ.copy()
     env[target.env_key_name] = target.env_key_value
+    env["OPENAI_API_KEY"] = target.env_key_value
 
     print(f"[codex-os] provider={target.provider_name} base_url={target.base_url} model={model}", file=sys.stderr)
-    print(f"[codex-os] env_key={target.env_key_name}", file=sys.stderr)
+    print(f"[codex-os] env_key={target.env_key_name} (forwarded as OPENAI_API_KEY)", file=sys.stderr)
     print(f"[codex-os] compat_disables={','.join(COMPAT_DISABLE_FEATURES)}", file=sys.stderr)
     if args.psycho:
         print("[codex-os] psycho=--dangerously-bypass-approvals-and-sandbox", file=sys.stderr)

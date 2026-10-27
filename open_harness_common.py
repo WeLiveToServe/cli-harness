@@ -27,6 +27,16 @@ OPENROUTER_BASE_URL = "OPENROUTER_BASE_URL"
 OPENROUTER_MODEL = "OPENROUTER_MODEL"
 OPENROUTER_MODEL_LIST = "OPENROUTER_MODEL_LIST"
 
+_DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+HARNESS_GEMINI_API_KEY = "HARNESS_GEMINI_API_KEY"
+HARNESS_GEMINI_BASE_URL = "HARNESS_GEMINI_BASE_URL"
+HARNESS_GEMINI_MODEL = "HARNESS_GEMINI_MODEL"
+GEMINI_API_KEY = "GEMINI_API_KEY"
+GEMINI_BASE_URL = "GEMINI_BASE_URL"
+GEMINI_MODEL = "GEMINI_MODEL"
+
 
 @dataclass
 class LaunchTarget:
@@ -175,6 +185,36 @@ def openrouter_target() -> LaunchTarget:
         base_url=normalize_base_url(_get_openrouter_base_url()),
         model=_get_openrouter_model(),
         env_key_name=HARNESS_OPENROUTER_API_KEY,
+        env_key_value=key,
+    )
+
+
+def _get_gemini_key() -> str:
+    return _resolve_env_value(HARNESS_GEMINI_API_KEY, GEMINI_API_KEY)
+
+
+def _get_gemini_base_url() -> str:
+    raw = _resolve_env_value(HARNESS_GEMINI_BASE_URL, GEMINI_BASE_URL, _DEFAULT_GEMINI_BASE_URL)
+    return raw.rstrip("/")
+
+
+def _get_gemini_model() -> str:
+    raw = _resolve_env_value(HARNESS_GEMINI_MODEL, GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
+    return raw.strip() or DEFAULT_GEMINI_MODEL
+
+
+def gemini_target() -> LaunchTarget:
+    key = _get_gemini_key()
+    if not key:
+        raise RuntimeError(
+            f"{HARNESS_GEMINI_API_KEY} (preferred) or {GEMINI_API_KEY} is not configured. "
+            f"Set it in process env or {_LOCAL_ENV_FILE}."
+        )
+    return LaunchTarget(
+        provider_name="gemini",
+        base_url=_get_gemini_base_url(),
+        model=_get_gemini_model(),
+        env_key_name=GEMINI_API_KEY,
         env_key_value=key,
     )
 

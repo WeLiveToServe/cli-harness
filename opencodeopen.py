@@ -19,6 +19,7 @@ from pathlib import Path
 from open_harness_common import openrouter_target, resolve_harness_model, run_interactive
 
 NATIVE_OVERRIDE_ENV = "OPENCODE_NATIVE_CLI"
+BIN_PATH_ENV = "OPENCODE_BIN_PATH"
 RECURSION_GUARD_ENV = "HARNESS_OPENCODE_WRAPPER_ACTIVE"
 
 
@@ -78,6 +79,28 @@ def _native_opencode() -> str:
         "Could not resolve native opencode CLI. "
         f"Install npm opencode or set {NATIVE_OVERRIDE_ENV} to an absolute native CLI path."
     )
+
+
+def _native_opencode_bin() -> str:
+    override = os.environ.get(BIN_PATH_ENV, "").strip()
+    if override:
+        override_path = Path(override)
+        if override_path.is_absolute() and override_path.exists():
+            return str(override_path)
+
+    appdata = os.environ.get("APPDATA", "")
+    if not appdata:
+        return ""
+
+    package_root = Path(appdata) / "npm" / "node_modules" / "opencode-ai" / "node_modules"
+    candidates = [
+        package_root / "opencode-windows-x64" / "bin" / "opencode.exe",
+        package_root / "opencode-windows-x64-baseline" / "bin" / "opencode.exe",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return ""
 
 
 def _delegate_native(argv: list[str]) -> int:
@@ -233,6 +256,9 @@ def main() -> int:
     env[RECURSION_GUARD_ENV] = "1"
     env[target.env_key_name] = target.env_key_value
     env["OPENROUTER_API_KEY"] = target.env_key_value
+    native_bin = _native_opencode_bin()
+    if native_bin:
+        env[BIN_PATH_ENV] = native_bin
     # Set OPENAI_API_KEY only for the spawned process; never as global canonical config.
     env["OPENAI_API_KEY"] = target.env_key_value
     env["OPENCODE_MODEL"] = model_arg
@@ -248,6 +274,8 @@ def main() -> int:
     print("[opencode] mode=forced-openrouter-config", file=sys.stderr)
     print(f"[opencode] xdg_root={str(Path.home() / '.opencode-openrouter')}", file=sys.stderr)
     print(f"[opencode] native_cli={native_cli}", file=sys.stderr)
+    if native_bin:
+        print(f"[opencode] native_bin={native_bin}", file=sys.stderr)
     if args.psycho:
         print("[opencode] psycho=--dangerously-skip-permissions", file=sys.stderr)
     print(f"[opencode] cmd={' '.join(shlex.quote(c) for c in cmd)}", file=sys.stderr)
